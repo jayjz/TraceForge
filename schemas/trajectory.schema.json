@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jayjz/TraceForge/schemas/trajectory.schema.json",
+  "title": "TraceForge Trajectory",
+  "description": "Normalized agent trajectory for process-aware evaluation. Inspired by ATIF concepts and production tracing needs.",
+  "type": "object",
+  "required": ["trajectory_id", "task", "steps", "outcome"],
+  "properties": {
+    "trajectory_id": {
+      "type": "string",
+      "description": "Unique identifier for this run"
+    },
+    "task": {
+      "type": "object",
+      "required": ["description"],
+      "properties": {
+        "description": { "type": "string" },
+        "goal": { "type": "string" },
+        "constraints": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "tools_available": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["step_id", "type"],
+        "properties": {
+          "step_id": { "type": "integer" },
+          "type": {
+            "type": "string",
+            "enum": ["thought", "tool_call", "tool_result", "error", "final_response", "escalation"]
+          },
+          "content": { "type": "string" },
+          "tool_name": { "type": "string" },
+          "arguments": { "type": "object" },
+          "result": {},
+          "error": { "type": "string" },
+          "timestamp": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "required": ["success"],
+      "properties": {
+        "success": { "type": "boolean" },
+        "final_answer": { "type": "string" },
+        "side_effects": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "total_steps": { "type": "integer" },
+            "tool_calls": { "type": "integer" },
+            "retries": { "type": "integer" },
+            "tokens": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "agent_id": { "type": "string" },
+        "model": { "type": "string" },
+        "harness": { "type": "string" },
+        "environment": { "type": "string" }
+      }
+    }
+  }
+}
