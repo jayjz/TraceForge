@@ -1,0 +1,229 @@
+{
+  "metadata": {
+    "cipherloop": {
+      "capture": {
+        "compressed_findings": [
+          {
+            "compressed_char_count": 153,
+            "critical_findings_count": 1,
+            "raw_char_count": 120,
+            "summary_note": "",
+            "tool": "run_semgrep",
+            "top_findings": [
+              "[ERROR] app.py:11 - Command injection"
+            ],
+            "total_findings": 1
+          }
+        ],
+        "execution_status": "completed",
+        "references": {
+          "raw_result_row": 2,
+          "source": "source.py",
+          "validation_row": 3
+        },
+        "remaining_messages": 0,
+        "removed_message_ids": [
+          "safe-ai",
+          "safe-tool"
+        ],
+        "run_id": "safe",
+        "scanner_input_sha256": "0e325a77a5b1b01e6122cf6a563722f83ec07210df796c3fdd5a34d13b18ecaa",
+        "source_sha256": "10419797e9e51b69fa84f111a4131a7acbbe1bf11f18ba71307cf5c2ccdeacfd",
+        "source_slice": {
+          "end_line": 16,
+          "file": "app.py",
+          "start_line": 11,
+          "text": "    result = subprocess.run(\n        [\"echo\", \"healthy\"],\n        check=True,\n        capture_output=True,\n        text=True,\n    )\n"
+        },
+        "synthetic_scanner": true,
+        "unavailable": [
+          "original_agent_task",
+          "final_report",
+          "models",
+          "recovery",
+          "safety",
+          "cost",
+          "tokens",
+          "rubric_scores"
+        ],
+        "validation_reads": [
+          {
+            "arguments": {
+              "end_line": 1000000,
+              "filepath": "app.py",
+              "start_line": 1
+            },
+            "source_sha256": "10419797e9e51b69fa84f111a4131a7acbbe1bf11f18ba71307cf5c2ccdeacfd",
+            "status": "ok"
+          }
+        ],
+        "verified_findings": []
+      },
+      "metric_definitions": {
+        "candidate_to_verified_ratio": "candidates / verified per validation invocation; null for zero verified",
+        "compressed_findings_count": "compressed tool-output batches",
+        "compression_ratio": "raw characters / retained dictionary characters; not tokens or cost",
+        "total_retries": "upstream planner invocation counter; harness supplied 0, planner not run"
+      },
+      "outcome_scope": "two-case fixture oracle",
+      "provenance": {
+        "cipherloop_commit": "f03a1e186e491cf24aa0f0e0671cac766c1fa8ab",
+        "environment": {
+          "packages": {
+            "aiohappyeyeballs": "2.7.1",
+            "aiohttp": "3.14.3",
+            "aiosignal": "1.4.0",
+            "annotated-types": "0.8.0",
+            "anthropic": "0.125.0",
+            "anyio": "4.14.2",
+            "ast-serialize": "0.8.0",
+            "attrs": "26.1.0",
+            "certifi": "2026.7.22",
+            "charset-normalizer": "3.5.1",
+            "cipherloop": "0.1.0",
+            "distro": "1.9.0",
+            "docker": "7.2.0",
+            "docstring-parser": "0.18.0",
+            "frozenlist": "1.8.0",
+            "greenlet": "3.5.5",
+            "h11": "0.16.0",
+            "httpcore": "1.0.9",
+            "httpx": "0.28.1",
+            "httpx-sse": "0.4.3",
+            "idna": "3.19",
+            "iniconfig": "2.3.0",
+            "jiter": "0.16.0",
+            "jsonpatch": "1.33",
+            "jsonpointer": "3.1.1",
+            "jsonschema": "4.26.0",
+            "jsonschema-specifications": "2025.9.1",
+            "langchain-anthropic": "1.6.1",
+            "langchain-classic": "1.0.8",
+            "langchain-community": "0.4.2",
+            "langchain-core": "1.6.0",
+            "langchain-protocol": "0.0.19",
+            "langchain-text-splitters": "1.1.2",
+            "langgraph": "1.2.11",
+            "langgraph-checkpoint": "4.2.0",
+            "langgraph-prebuilt": "1.1.0",
+            "langgraph-sdk": "0.4.3",
+            "langsmith": "0.11.1",
+            "librt": "0.15.0",
+            "multidict": "6.7.1",
+            "mypy": "2.3.1",
+            "mypy-extensions": "1.1.0",
+            "numpy": "2.5.2",
+            "orjson": "3.12.0",
+            "ormsgpack": "1.12.2",
+            "packaging": "26.3",
+            "pathspec": "1.1.1",
+            "pip": "24.0",
+            "pluggy": "1.6.0",
+            "propcache": "0.5.2",
+            "pydantic": "2.13.4",
+            "pydantic-core": "2.46.4",
+            "pydantic-settings": "2.15.0",
+            "pygments": "2.21.0",
+            "pytest": "9.1.1",
+            "python-dotenv": "1.2.3",
+            "pyyaml": "6.0.3",
+            "referencing": "0.37.0",
+            "requests": "2.34.2",
+            "requests-toolbelt": "1.0.0",
+            "rpds-py": "2026.6.3",
+            "ruff": "0.16.4",
+            "sniffio": "1.3.1",
+            "sqlalchemy": "2.0.52",
+            "tenacity": "9.1.4",
+            "tree-sitter": "0.26.0",
+            "typing-extensions": "4.16.0",
+            "typing-inspection": "0.4.4",
+            "urllib3": "2.7.0",
+            "uuid-utils": "0.17.0",
+            "websockets": "16.1.1",
+            "xxhash": "4.0.1",
+            "yarl": "1.24.5",
+            "zstandard": "0.25.0"
+          },
+          "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.39",
+          "python": "3.12.3"
+        },
+        "implementation_sha256": {
+          "rubrics/base_v0.yaml": "2b33c1878846af807e0fa90b2dfc07cf7a8e682bf8a5e4225eb0b6e79545004f",
+          "schemas/trajectory.schema.json": "f47094020fc6887956de2e985794e76e1f5bfc13e875e994bab8529762ff32f4",
+          "scripts/generate_cipherloop_baseline.py": "328dceee07f3b43a3b5cf280f1d35c3de570e4ae7543214172c210cb7eb8a0e8",
+          "src/traceforge/adapters/cipherloop.py": "f6d766e7b54319d0ef55a5583ba59657ebd918c88233354e00732daadab12ef0",
+          "src/traceforge/evaluation/baseline_contract.py": "638cb8882f50459280b2538e19c8fae5d2b4b061093a0494fe08d95851437a83",
+          "src/traceforge/evaluation/cipherloop_baseline.py": "a4c5ea966bf0c71d0e92261c58c42db645a3f548196c125522c225758faed06f",
+          "tests/fixtures/cipherloop/environment.json": "ba1ea48f3f5695cb29a7c85d02552f586ff07934c637d27cf74f4469ba875887",
+          "tests/fixtures/cipherloop/manifest.json": "5d43b292921bff44399147f0f011bcd5eb762edc8aa5d95b10e1f0f28084597e"
+        },
+        "normalization_version": "cipherloop-offline-v1",
+        "scanner": "synthetic Semgrep-shaped response; no scanner executed",
+        "traceforge_base_commit": "3a79434bc63d0db932abfa0fe855eed3c7262b4c"
+      },
+      "recorder_metadata": {
+        "compressed_findings_count": 1,
+        "compression_ratio": 0.7843137254901961,
+        "final_plan": null,
+        "run_id": "safe",
+        "target_directory": "/workspace/target_repo",
+        "total_compressed_char_count": 153,
+        "total_raw_char_count": 120,
+        "total_retries": 0
+      },
+      "task_origin": "independent fixture manifest",
+      "validation_events": [
+        {
+          "payload": {
+            "candidate_to_verified_ratio": null,
+            "rejected_count": 1,
+            "total_candidates": 1,
+            "verified_count": 0
+          },
+          "reference": {
+            "artifact": "trajectory_safe.jsonl",
+            "row": 3
+          }
+        }
+      ]
+    },
+    "harness": "cipherloop-offline-v1"
+  },
+  "outcome": {
+    "success": true
+  },
+  "steps": [
+    {
+      "arguments": {
+        "target_path": "app.py"
+      },
+      "cipherloop_reference": {
+        "artifact": "trajectory_safe.jsonl",
+        "row": 1
+      },
+      "content": "",
+      "step_id": 1,
+      "timestamp": "2026-09-09T18:00:39.509134Z",
+      "tool_call_id": "safe-scan",
+      "tool_name": "run_semgrep",
+      "type": "tool_call"
+    },
+    {
+      "cipherloop_reference": {
+        "artifact": "trajectory_safe.jsonl",
+        "row": 2
+      },
+      "result": "{\"results\": [{\"extra\": {\"message\": \"Command injection\", \"severity\": \"ERROR\"}, \"path\": \"app.py\", \"start\": {\"line\": 11}}]}",
+      "step_id": 2,
+      "timestamp": "2026-09-09T18:00:39.509204Z",
+      "tool_call_id": "safe-scan",
+      "tool_name": "run_semgrep",
+      "type": "tool_result"
+    }
+  ],
+  "task": {
+    "description": "Reject the supplied command-injection candidate with constant arguments in the safe fixture."
+  },
+  "trajectory_id": "safe"
+}

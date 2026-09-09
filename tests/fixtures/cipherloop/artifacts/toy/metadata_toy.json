@@ -1,0 +1,11 @@
+{
+  "run_id": "toy",
+  "target_directory": "/workspace/target_repo",
+  "final_plan": null,
+  "total_retries": 0,
+  "compressed_findings_count": 1,
+  "trajectory_file": "/home/abundance333/Desktop/Projects/TraceForge/tests/fixtures/cipherloop/artifacts/toy/trajectory_toy.jsonl",
+  "total_raw_char_count": 120,
+  "total_compressed_char_count": 153,
+  "compression_ratio": 0.7843137254901961
+}
