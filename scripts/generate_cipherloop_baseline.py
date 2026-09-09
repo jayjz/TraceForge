@@ -10,11 +10,10 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from traceforge.evaluation.baseline_contract import (
-    FIXTURES,
     ArtifactError,
     canonical_artifact,
     digest,
-    environment,
+    load_manifest,
     provenance,
     read,
     require,
@@ -28,7 +27,7 @@ def git(repo, *args):
 
 
 def generate(repo, output):
-    manifest = read(FIXTURES / "manifest.json")
+    manifest = load_manifest()
     require(
         git(repo, "rev-parse", "HEAD") == manifest["cipherloop_commit"],
         "CipherLoop commit mismatch",
@@ -36,10 +35,6 @@ def generate(repo, output):
     require(
         not git(repo, "status", "--porcelain", "--untracked-files=all"),
         "CipherLoop working tree must be clean",
-    )
-    require(
-        environment() == read(FIXTURES / "environment.json"),
-        "capture environment differs from environment.json",
     )
     sources = {}
     for case in manifest["cases"]:
@@ -193,8 +188,17 @@ def main():
     args = parser.parse_args()
     try:
         generate(args.cipherloop.resolve(), args.output.resolve())
-    except (ArtifactError, OSError, ValueError, subprocess.CalledProcessError) as exc:
-        print(f"capture error: {exc}", file=sys.stderr)
+    except (
+        ArtifactError,
+        OSError,
+        UnicodeError,
+        subprocess.CalledProcessError,
+        ModuleNotFoundError,
+    ) as exc:
+        print(
+            json.dumps({"stage": "capture", "status": "error", "error": str(exc)}),
+            file=sys.stderr,
+        )
         return 2
     print(f"Captured toy and safe in {args.output}")
     return 0

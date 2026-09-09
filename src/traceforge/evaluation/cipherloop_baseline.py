@@ -6,10 +6,10 @@ from pathlib import Path
 
 from traceforge.adapters.cipherloop import load_case, validate_normalized
 from traceforge.evaluation.baseline_contract import (
-    FIXTURES,
+    CASE_IDS,
     ArtifactError,
     canonical_artifact,
-    read,
+    load_manifest,
     write,
 )
 
@@ -49,7 +49,7 @@ def evaluate_case(folder, case):
             "steps": steps,
             "outcome": {"success": success},
             "metadata": {
-                "harness": "cipherloop-offline-v1",
+                "harness": provenance["normalization_version"],
                 "cipherloop": {
                     "capture": capture,
                     "recorder_metadata": canonical_artifact("metadata", metadata),
@@ -79,17 +79,57 @@ def evaluate_case(folder, case):
         return {"case": case["id"], "status": "error", "error": str(exc)}, None
 
 
+def invalidate_output(directory, case_id):
+    """Only the two reserved result filenames are evaluator-owned.
+
+    Do this before any reads, so even a manifest failure cannot leave old success.
+    Never traverse a case-directory symlink or recursively remove anything.
+    """
+    folder = directory / case_id
+    if directory.is_symlink() or folder.is_symlink():
+        raise ArtifactError(f"refusing symlinked output directory: {folder}")
+    try:
+        (folder / "normalized.json").unlink(missing_ok=True)
+    except OSError as exc:
+        raise ArtifactError(
+            f"cannot invalidate {folder / 'normalized.json'}; any existing result is stale: {exc}"
+        ) from exc
+
+
+def error_result(case_id, exc):
+    return {"case": case_id, "status": "error", "error": str(exc)}
+
+
 def evaluate(directory):
-    cases = read(FIXTURES / "manifest.json")["cases"]
+    invalidations = {}
+    for case_id in CASE_IDS:
+        try:
+            invalidate_output(directory, case_id)
+        except (ArtifactError, OSError) as exc:
+            invalidations[case_id] = str(exc)
+    try:
+        cases = load_manifest()["cases"]
+    except ArtifactError as exc:
+        return [
+            error_result(
+                case_id,
+                f"{exc}; {invalidations[case_id]}" if case_id in invalidations else exc,
+            )
+            for case_id in CASE_IDS
+        ]
     results = []
     for case in cases:
-        result, normalized = evaluate_case(directory / case["id"], case)
+        case_id = case["id"]
+        if case_id in invalidations:
+            results.append(error_result(case_id, invalidations[case_id]))
+            continue
+        try:
+            result, normalized = evaluate_case(directory / case_id, case)
+            if normalized is not None:
+                write(directory / case_id / "normalized.json", normalized)
+        except ArtifactError as exc:
+            result = error_result(case_id, exc)
         results.append(result)
-        if normalized is not None:
-            write(directory / case["id"] / "normalized.json", normalized)
-        else:
-            # A previous successful evaluation must not survive invalidated input.
-            (directory / case["id"] / "normalized.json").unlink(missing_ok=True)
     return results
 
 

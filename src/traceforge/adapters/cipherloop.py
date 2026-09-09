@@ -5,6 +5,7 @@ import math
 from datetime import datetime, timezone
 
 from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema.exceptions import SchemaError
 
 from traceforge.evaluation.baseline_contract import (
     ROOT,
@@ -12,10 +13,10 @@ from traceforge.evaluation.baseline_contract import (
     canonical_artifact,
     digest,
     parse,
-    provenance,
     read,
     require,
     sha,
+    validate_provenance,
 )
 
 
@@ -100,7 +101,10 @@ def match_messages(rows, run_id):
 
 def validate_normalized(trajectory):
     schema = read(ROOT / "schemas/trajectory.schema.json")
-    Draft202012Validator.check_schema(schema)
+    try:
+        Draft202012Validator.check_schema(schema)
+    except SchemaError as exc:
+        raise ArtifactError(f"invalid trajectory schema: {exc.message}") from exc
     errors = list(
         Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(
             trajectory
@@ -117,7 +121,7 @@ def validate_normalized(trajectory):
 def _load_case(folder, case):
     case_id = case["id"]
     index = read(folder.parent / "index.json")
-    require(index["provenance"] == provenance(), "incompatible provenance")
+    validate_provenance(index)
     require(set(index["cases"]) == {"toy", "safe"}, "incomplete case index")
     source = (folder / "source.py").read_bytes()
     require(

@@ -22,6 +22,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.4"]
+# Only imports used by the synthetic harness, not CipherLoop's live agent stack.
+baseline = ["langchain-core==1.6.0", "langgraph==1.2.11", "docker==7.2.0"]
 
 [build-system]
 requires = ["setuptools>=61"]
@@ -29,3 +31,10 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B"]

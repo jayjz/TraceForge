@@ -1,108 +1,90 @@
 # TraceForge
 
-**Process-aware evaluation and adaptive rubrics for tool-using LLM agents.**
+TraceForge is an **experimental Python evaluation package** for studying evidence
+and trajectories from tool-using agents.
 
-TraceForge scores the *trajectory*, not just the final answer.  
-It targets the gaps that current production evals still miss: recovery quality, tool-selection/argument correctness, process efficiency, coherence, side-effects, and the "Lucky Pass" problem (correct outcome via brittle or chaotic path).
+The implemented system is a **two-case offline CipherLoop evidence baseline**:
+scripted scanner responses pass through CipherLoop's real compressor, AST
+validator, and recorder. TraceForge ingests the resulting files, checks schema
+and evidence integrity, and evaluates an independent fixture oracle.
 
-Grounded in recent scholarly work including AgentLens, AdaRubric, TRACE, TRAJECT-Bench, Plan-RewardBench, ACES/ATIF, and Recovery-Bench style protocols.
+- `toy`: one expected source → variable → command-execution finding.
+- `safe`: zero verified findings after a successful source read and rejection of
+  the supplied candidate.
 
----
+These fixtures test evidence handling and integration. They do not establish
+scanner coverage, general detection accuracy, or security effectiveness.
 
-## Why this exists
+General trajectory scoring, calibrated LLM judges, production ingestion, and live
+detection evaluation are **not implemented**. The research notes and weighted
+rubric describe future work. Recovery, safety, cost, token, and rubric scores
+remain unavailable in this baseline.
 
-Most agent evals still reduce a run to pass/fail or final-answer accuracy.  
-Research consistently shows this is insufficient:
+## Clean setup
 
-- **Lucky Pass problem** (AgentLens): ~10%+ of successful trajectories on coding agents reach the right outcome through weak process (brute-force, incomplete verification, excessive exploration).
-- **Static rubrics fail** (AdaRubric): Fixed dimensions (Helpfulness, Fluency…) systematically mis-score goal-directed tool agents. Task-adaptive rubrics raise human correlation significantly.
-- **Trajectory > outcome** (TRACE, TRAJECT-Bench, Plan-RewardBench): Tool selection order, argument validity, dependency satisfaction, recovery from injected faults, and efficiency must be scored explicitly.
-- **Long-horizon degradation**: Preference judges and LLM-as-Judge accuracy drop sharply as trajectory length grows.
+Use Python 3.12 and Git. Run from the TraceForge checkout. The baseline currently
+uses an editable installation because its manifest, schema, and source provenance
+remain checkout resources; a standalone wheel is not a supported baseline runner.
 
-TraceForge is a practical, local-first scaffold for building production-grade process evaluation on *your* agents (control planes, ops agents, edge systems).
-
----
-
-## Core Design Principles (from the literature)
-
-1. **Trajectory is the unit of evaluation** — ordered sequence of thoughts, tool calls + args + returns, errors, retries, state changes, final outcome.
-2. **Multi-dimensional, preferably task-adaptive rubrics** — orthogonal axes with explicit verbalized criteria (1–5 or pass/fail + rationale).
-3. **Separate process from outcome** — detect Lucky Passes; score recovery independently of final success.
-4. **Deterministic gates + LLM judges** — schema validity, forbidden actions, retry limits are code-checked; interpretive dimensions use calibrated LLM-as-Judge.
-5. **Human calibration loop** — inter-rater agreement and human–judge agreement are first-class metrics.
-6. **Actionable diagnostics** — scores must point to concrete improvements (tool schema, prompt, control-plane guards, recovery policy).
-
----
-
-## Planned Dimensions (v0 base rubric)
-
-| Dimension | What it measures | Primary sources |
-|-----------|------------------|-----------------|
-| Goal Achievement | Did the trajectory accomplish the stated + inferred intent? | AgentLens, TRACE, production practice |
-| Tool Selection & Arguments | Correct tool(s), valid schema, semantic arg correctness | TRAJECT-Bench, BFCL lineage, Plan-RewardBench |
-| Recovery Quality | Detection → diagnosis → correct response to tool/env failures | Plan-RewardBench (Robust Recovery), Recovery-Bench |
-| Process Efficiency & Coherence | Minimal waste, no loops, sensible depth, logical ordering | TRACE (Efficiency), AgentLens (waste signals) |
-| Side-Effects / Safety / Constraints | No unintended writes, policy violations, unsafe actions | Plan-RewardBench (Safety Refusal), production |
-| (Optional) Uncertainty & Escalation | Calibrated communication when stuck or uncertain | Recovery protocols |
-
-These are starting points. AdaRubric-style task-adaptive generation will be layered on top.
-
----
-
-## Repository Structure (scaffold)
-
-```
-TraceForge/
-├── README.md
-├── docs/
-│   ├── research-foundation.md      # Key papers & design decisions
-│   ├── rubric-design.md            # How to build & calibrate rubrics
-│   └── trajectory-schema.md        # Normalized trajectory format
-├── schemas/
-│   └── trajectory.schema.json      # Minimal ATIF-inspired schema
-├── rubrics/
-│   ├── base_v0.yaml                # Initial multi-dimensional rubric
-│   └── examples/
-├── src/
-│   └── traceforge/
-│       ├── __init__.py
-│       ├── schema.py
-│       ├── scorer.py               # Deterministic + LLM-judge scaffolding
-│       └── diagnostics.py
-├── examples/
-│   └── sample_trajectory.json
-├── tests/
-└── pyproject.toml
+```sh
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements/bootstrap.txt
+# TraceForge itself:
+.venv/bin/python -m pip install --no-build-isolation -c requirements/baseline.txt -e .
+# Optional synthetic-capture dependencies and focused test tools:
+.venv/bin/python -m pip install --no-build-isolation -c requirements/baseline.txt -e '.[dev,baseline]'
+.venv/bin/python -m pip check
 ```
 
----
+The constraints pin the complete tested dependency resolution for CPython 3.12
+on Linux x86_64. Setup may access the package index; execution is offline. Neither
+a global Python installation nor CipherLoop's existing environment is modified.
 
-## Research Foundation (selected)
+The harness additionally reads the pinned CipherLoop **source checkout** at
+`../CipherLoop`. It imports only the components needed for synthetic capture;
+do not install CipherLoop's full live-agent dependency stack. If the sibling
+already exists, verify its HEAD and clean working tree; do not reset it. If it
+is absent, obtain a new read-only source checkout:
 
-- **AgentLens** — Process-aware SWE trajectory scoring; Lucky Pass detection; PTA references.
-- **AdaRubric** — Task-adaptive rubric generation; step-level confidence-weighted scoring; high human correlation.
-- **TRACE** — Reference-free multi-dimensional trajectory evaluation (Efficiency, Hallucination, Adaptivity) with evidence bank.
-- **TRAJECT-Bench** — Trajectory-aware tool-use metrics (selection, arguments, order/dependency).
-- **Plan-RewardBench** — Trajectory-level preference benchmark covering Safety Refusal, Tool-Irrelevance, Complex Planning, Robust Error Recovery.
-- **ACES / ATIF** — Agent Trajectory Interchange Format; skill-level continuous evaluation.
-- Supporting: Recovery-Bench style protocols, long-horizon dense grading work, AgentAtlas taxonomies.
+```sh
+git clone --no-checkout https://github.com/jayjz/CipherLoop.git ../CipherLoop
+git -C ../CipherLoop checkout --detach f03a1e186e491cf24aa0f0e0671cac766c1fa8ab
+```
 
-Full notes live in `docs/research-foundation.md`.
+The harness verifies that exact commit, a clean working tree, and both fixture
+hashes. It refuses incompatible source rather than substituting a newer revision.
 
----
+## Offline reproduction
 
-## Status
+After setup, run this generate → evaluate block:
 
-**Scaffold / Phase 0** (August 2026).  
-Research mapped. Core schema + base rubric + evaluation loop design in progress.  
-Intended first use-cases: local control-plane agents (AetherForge-style), field/ops agents, thin-client edge agents under real constraints.
+```sh
+export PYTHONDONTWRITEBYTECODE=1 LANGSMITH_TRACING=false
+unset OPENAI_API_KEY ANTHROPIC_API_KEY LANGSMITH_API_KEY
+baseline_dir="$(mktemp -d /tmp/traceforge-repro.XXXXXX)/capture"
+.venv/bin/python scripts/generate_cipherloop_baseline.py --output "$baseline_dir" &&
+  .venv/bin/python -m traceforge.evaluation.cipherloop_baseline "$baseline_dir"
+```
 
----
+No cloud credentials, models, Docker daemon, Ollama, GPU, or live scanner are
+needed. The evaluator prints JSON diagnostics and writes normalized results.
+Exit codes are `0` for fixture success, `1` for a valid oracle mismatch, and `2`
+for artifact or operational errors. Output directories must be fresh for capture.
 
-## License
+See [the baseline documentation](docs/cipherloop-baseline.md) for exact verified
+commands, provenance, filesystem behavior, test results, and limitations.
+[The GitHub Actions workflow](.github/workflows/cipherloop-baseline.yml) runs the
+bounded checks using the same setup; adding the workflow does not establish that
+a hosted run has passed.
 
-MIT (planned).
+## Implemented files and research
 
----
+- `scripts/generate_cipherloop_baseline.py`: synthetic capture harness.
+- `src/traceforge/adapters/cipherloop.py`: artifact-only ingestion and integrity checks.
+- `src/traceforge/evaluation/`: fixture evaluation and versioned file contract.
+- `tests/fixtures/cipherloop/`: two-case manifest and preserved reference evidence.
+- `schemas/trajectory.schema.json`: normalized trajectory schema.
+- [Research foundation](docs/research-foundation.md) and
+  [rubric design](docs/rubric-design.md): research and planned evaluation methods.
 
-*Built for people who ship agents under real constraints — not demo-only evaluation.*
+Licensed under [MIT](LICENSE).

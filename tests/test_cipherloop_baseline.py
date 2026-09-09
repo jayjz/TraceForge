@@ -66,7 +66,19 @@ def test_full_canonical_reproduction(captures):
         return result
 
     assert canonical(captures[0]) == canonical(captures[1])
-    assert canonical(captures[0]) == canonical(FIXTURES / "artifacts")
+    # The old reference retains its original implementation/environment identity.
+    # Evidence hashes and diagnostics must still agree; provenance is not stripped
+    # from the full fresh-to-fresh reproduction comparison above.
+    assert (
+        read(captures[0] / "index.json")["cases"]
+        == read(FIXTURES / "artifacts/index.json")["cases"]
+    )
+    for case in CASES:
+        result, normalized = evaluate_case(FIXTURES / "artifacts" / case["id"], case)
+        assert result["status"] == "pass"
+        assert canonical_artifact("normalized", normalized) == canonical_artifact(
+            "normalized", read(FIXTURES / "artifacts" / case["id"] / "normalized.json")
+        )
 
 
 def test_valid_but_wrong_path_is_oracle_failure(bundle):

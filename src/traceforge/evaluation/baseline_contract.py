@@ -3,12 +3,19 @@
 import hashlib
 import importlib.metadata
 import json
+import os
 import platform
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = ROOT / "tests/fixtures/cipherloop"
-VERSION = "cipherloop-offline-v1"
+VERSION = "cipherloop-offline-v2"
+CASE_IDS = ("toy", "safe")
+MANIFEST_SHA256 = "5d43b292921bff44399147f0f011bcd5eb762edc8aa5d95b10e1f0f28084597e"
+REFERENCE_INDEX_SHA256 = (
+    "15ca2a846573905931236aad1de94a9aa06dfbf5fda9c141848ac1f043533631"
+)
 IMPLEMENTATION = (
     "scripts/generate_cipherloop_baseline.py",
     "src/traceforge/adapters/cipherloop.py",
@@ -17,7 +24,8 @@ IMPLEMENTATION = (
     "schemas/trajectory.schema.json",
     "rubrics/base_v0.yaml",
     "tests/fixtures/cipherloop/manifest.json",
-    "tests/fixtures/cipherloop/environment.json",
+    "pyproject.toml",
+    "requirements/baseline.txt",
 )
 
 
@@ -46,14 +54,53 @@ def parse(text):
 
 
 def read(path):
-    return parse(path.read_text(encoding="utf-8"))
+    try:
+        return parse(read_bytes(path).decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError, ArtifactError) as exc:
+        raise ArtifactError(f"read {path}: {exc}") from exc
+
+
+def read_bytes(path):
+    try:
+        return path.read_bytes()
+    except OSError as exc:
+        raise ArtifactError(f"read {path}: {exc}") from exc
+
+
+def load_manifest():
+    path = FIXTURES / "manifest.json"
+    data = read_bytes(path)
+    # This release supports exactly the original two cases. Check before using
+    # IDs as paths or interpreting oracle fields; a changed manifest is incompatible.
+    require(sha(data) == MANIFEST_SHA256, f"{path}: incompatible manifest")
+    return parse(data.decode("utf-8"))
 
 
 def write(path, value):
-    path.write_text(
-        json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n",
-        encoding="utf-8",
-    )
+    """Atomic replacement; failed serialization is a programming error."""
+    text = json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n"
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(text)
+        os.replace(temporary, path)
+    except OSError as exc:
+        raise ArtifactError(f"write {path}: {exc}") from exc
+    finally:
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError as exc:
+                raise ArtifactError(
+                    f"temporary output cleanup {temporary}: {exc}"
+                ) from exc
 
 
 def sha(data):
@@ -86,7 +133,7 @@ def canonical_artifact(name, value):
 
 
 def environment():
-    # Include the entire resolved environment, including pre-existing packages.
+    # Observation, not a compatibility gate. No environment packages are imported.
     packages = {}
     for dist in importlib.metadata.distributions():
         name = dist.metadata["Name"].lower().replace("_", "-")
@@ -98,15 +145,53 @@ def environment():
     }
 
 
-def provenance():
-    manifest = read(FIXTURES / "manifest.json")
+def provenance(captured_environment=None):
+    manifest = load_manifest()
     return {
         "normalization_version": VERSION,
         "cipherloop_commit": manifest["cipherloop_commit"],
         "traceforge_base_commit": manifest["traceforge_base_commit"],
         "implementation_sha256": {
-            name: sha((ROOT / name).read_bytes()) for name in IMPLEMENTATION
+            name: sha(read_bytes(ROOT / name)) for name in IMPLEMENTATION
         },
-        "environment": read(FIXTURES / "environment.json"),
+        "environment": environment()
+        if captured_environment is None
+        else captured_environment,
         "scanner": "synthetic Semgrep-shaped response; no scanner executed",
     }
+
+
+def validate_provenance(index):
+    captured = index["provenance"]
+    if captured["normalization_version"] == "cipherloop-offline-v1":
+        # Preserve the original reference without regenerating its evidence or
+        # accepting arbitrary legacy producers whose implementation is unavailable.
+        data = read_bytes(FIXTURES / "artifacts/index.json")
+        require(sha(data) == REFERENCE_INDEX_SHA256, "reference index hash mismatch")
+        require(
+            index == parse(data.decode("utf-8")), "incompatible reference provenance"
+        )
+        return
+    observed = captured["environment"]
+    require(
+        isinstance(observed, dict)
+        and set(observed) == {"python", "platform", "packages"},
+        "invalid environment provenance",
+    )
+    require(
+        all(
+            isinstance(observed[key], str) and observed[key]
+            for key in ("python", "platform")
+        ),
+        "missing environment identity",
+    )
+    require(
+        isinstance(observed["packages"], dict)
+        and observed["packages"]
+        and all(
+            isinstance(k, str) and isinstance(v, str) and v
+            for k, v in observed["packages"].items()
+        ),
+        "invalid package provenance",
+    )
+    require(captured == provenance(observed), "incompatible provenance")
