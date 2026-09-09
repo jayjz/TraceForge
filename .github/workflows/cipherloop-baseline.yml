@@ -1,0 +1,54 @@
+name: CipherLoop offline baseline
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      LANGSMITH_TRACING: "false"
+    defaults:
+      run:
+        shell: bash
+        working-directory: TraceForge
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: TraceForge
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: jayjz/CipherLoop
+          ref: f03a1e186e491cf24aa0f0e0671cac766c1fa8ab
+          path: CipherLoop
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Verify pinned source and install
+        run: |
+          test "$(git -C ../CipherLoop rev-parse HEAD)" = f03a1e186e491cf24aa0f0e0671cac766c1fa8ab
+          python -m venv .venv
+          .venv/bin/python -m pip install -r requirements/bootstrap.txt
+          .venv/bin/python -m pip install --no-build-isolation -c requirements/baseline.txt -e .
+          .venv/bin/python -m pip install --no-build-isolation -c requirements/baseline.txt -e '.[dev,baseline]'
+          .venv/bin/python -m pip check
+      - name: Focused tests and lint
+        run: |
+          .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_cipherloop_adapter.py tests/test_cipherloop_baseline.py tests/test_baseline_operations.py
+          .venv/bin/python -m ruff check scripts/generate_cipherloop_baseline.py src/traceforge tests/conftest.py tests/test_cipherloop_adapter.py tests/test_cipherloop_baseline.py tests/test_baseline_operations.py
+      - name: Generate and evaluate without credentials
+        run: |
+          unset OPENAI_API_KEY ANTHROPIC_API_KEY LANGSMITH_API_KEY
+          .venv/bin/python scripts/generate_cipherloop_baseline.py --output "$RUNNER_TEMP/cipherloop-baseline"
+          .venv/bin/python -m traceforge.evaluation.cipherloop_baseline "$RUNNER_TEMP/cipherloop-baseline"
+          git diff --exit-code
+          test -z "$(git -C ../CipherLoop status --porcelain)"

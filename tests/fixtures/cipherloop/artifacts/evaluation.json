@@ -1,0 +1,81 @@
+[
+  {
+    "case": "toy",
+    "checks": [
+      {
+        "id": "verified_count",
+        "passed": true,
+        "reference": "capture.json#/verified_findings"
+      },
+      {
+        "id": "rejected_count",
+        "passed": true,
+        "reference": "trajectory_toy.jsonl:3"
+      },
+      {
+        "id": "source",
+        "passed": true,
+        "reference": "capture.json#/verified_findings/0/source"
+      },
+      {
+        "id": "sink",
+        "passed": true,
+        "reference": "capture.json#/verified_findings/0/sink"
+      },
+      {
+        "id": "taint_path",
+        "passed": true,
+        "reference": "capture.json#/verified_findings/0/taint_path"
+      }
+    ],
+    "observed": {
+      "candidate_to_verified_ratio": 1.0,
+      "rejected_count": 0,
+      "total_candidates": 1,
+      "verified_count": 1
+    },
+    "status": "pass",
+    "unavailable": [
+      "original_agent_task",
+      "final_report",
+      "models",
+      "recovery",
+      "safety",
+      "cost",
+      "tokens",
+      "rubric_scores"
+    ]
+  },
+  {
+    "case": "safe",
+    "checks": [
+      {
+        "id": "verified_count",
+        "passed": true,
+        "reference": "capture.json#/verified_findings"
+      },
+      {
+        "id": "rejected_count",
+        "passed": true,
+        "reference": "trajectory_safe.jsonl:3"
+      }
+    ],
+    "observed": {
+      "candidate_to_verified_ratio": null,
+      "rejected_count": 1,
+      "total_candidates": 1,
+      "verified_count": 0
+    },
+    "status": "pass",
+    "unavailable": [
+      "original_agent_task",
+      "final_report",
+      "models",
+      "recovery",
+      "safety",
+      "cost",
+      "tokens",
+      "rubric_scores"
+    ]
+  }
+]

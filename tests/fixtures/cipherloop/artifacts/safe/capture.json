@@ -1,0 +1,58 @@
+{
+  "compressed_findings": [
+    {
+      "compressed_char_count": 153,
+      "critical_findings_count": 1,
+      "raw_char_count": 120,
+      "summary_note": "",
+      "tool": "run_semgrep",
+      "top_findings": [
+        "[ERROR] app.py:11 - Command injection"
+      ],
+      "total_findings": 1
+    }
+  ],
+  "execution_status": "completed",
+  "references": {
+    "raw_result_row": 2,
+    "source": "source.py",
+    "validation_row": 3
+  },
+  "remaining_messages": 0,
+  "removed_message_ids": [
+    "safe-ai",
+    "safe-tool"
+  ],
+  "run_id": "safe",
+  "scanner_input_sha256": "0e325a77a5b1b01e6122cf6a563722f83ec07210df796c3fdd5a34d13b18ecaa",
+  "source_sha256": "10419797e9e51b69fa84f111a4131a7acbbe1bf11f18ba71307cf5c2ccdeacfd",
+  "source_slice": {
+    "end_line": 16,
+    "file": "app.py",
+    "start_line": 11,
+    "text": "    result = subprocess.run(\n        [\"echo\", \"healthy\"],\n        check=True,\n        capture_output=True,\n        text=True,\n    )\n"
+  },
+  "synthetic_scanner": true,
+  "unavailable": [
+    "original_agent_task",
+    "final_report",
+    "models",
+    "recovery",
+    "safety",
+    "cost",
+    "tokens",
+    "rubric_scores"
+  ],
+  "validation_reads": [
+    {
+      "arguments": {
+        "end_line": 1000000,
+        "filepath": "app.py",
+        "start_line": 1
+      },
+      "source_sha256": "10419797e9e51b69fa84f111a4131a7acbbe1bf11f18ba71307cf5c2ccdeacfd",
+      "status": "ok"
+    }
+  ],
+  "verified_findings": []
+}
