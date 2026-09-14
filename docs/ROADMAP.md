@@ -1,6 +1,20 @@
 # TraceForge Roadmap
 
-## Phase 0 — Scaffold (current)
+## Current release boundary — 2026-09-12
+
+The frozen two-case CipherLoop baseline remains unchanged. Initial P0.2 production
+artifact ingestion is implemented and verified offline; see
+[the production contract scope](cipherloop-production.md). A real missing-Docker
+preflight failure was ingested as ERROR. Successful live sandbox/model execution
+is not yet demonstrated and is the next bounded verification step on Windows.
+Repository CI now includes the production regression tests alongside the baseline;
+this does not claim a hosted run has passed. Cross-repository feature compatibility
+CI needs published compatible revisions before it can pin these local fixes.
+
+The phases below are longer-term research directions, not release acceptance
+criteria or authority to add judges, scanner capability, or product UI now.
+
+## Phase 0 — Scaffold (established)
 - Research foundation documented
 - Trajectory schema (v0)
 - Base multi-dimensional rubric (v0)
