@@ -94,6 +94,39 @@ Source-read failure can have observed
 execution `completed`; the explicit validation error prevents confusing it with
 a clean zero-candidate observation.
 
+## Pinned cross-repository compatibility replay
+
+TraceForge owns the compatibility replay because it owns the independent result.
+It clones CipherLoop into a private temporary directory at exactly
+`c98c5d80e507ad3010d8004c86d7d6b8a4ac0c87`, installs CipherLoop's declared
+environment in its own virtual environment, and invokes its existing smoke command:
+
+```sh
+.venv/bin/python scripts/replay_cipherloop_production.py \
+  --cipherloop-revision c98c5d80e507ad3010d8004c86d7d6b8a4ac0c87
+```
+
+The replay copies the producer-emitted `trajectory_<run_id>.jsonl` and
+`metadata_<run_id>.json` files unchanged before passing them to `ingest_run`.
+It records the pinned revision, run IDs, contract version, filenames/digests, and
+TraceForge statuses in its JSON output. The `verified` positive control must yield
+TraceForge `PASS`; the producer's existing `failed` scenario must yield `ERROR`.
+It also changes bytes only in a copied ledger, leaves metadata untouched, and requires
+the reader to reject the hash mismatch. No fixture is reconstructed and no CipherLoop
+runtime module is imported by the evaluator.
+
+The `production-v2-replay` job in
+[`cipherloop-baseline.yml`](../.github/workflows/cipherloop-baseline.yml) runs this
+alongside a separate evaluator installation and then TraceForge's complete suite.
+The distinct `baseline` job remains frozen at CipherLoop
+`f03a1e186e491cf24aa0f0e0671cac766c1fa8ab`; it is neither repinned nor used by this
+production-v2 replay.
+
+This is still an offline scripted-observation capture. It does not run Docker,
+Ollama, a scanner, a target application, cloud models, or model APIs; it does not
+establish source/producer authenticity, scanner or vulnerability correctness,
+exploitability, production readiness, or general agent reliability.
+
 ```sh
 python -m pytest -q tests/test_cipherloop_production.py
 python -m ruff check src/traceforge/adapters/cipherloop_production.py tests/test_cipherloop_production.py
