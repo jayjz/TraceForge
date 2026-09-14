@@ -145,6 +145,51 @@ def _check_finding(finding, parsed, read, span):
              "finding evidence description mismatch")
 
 
+def _scanner_results(data):
+    """Return only scanner results TraceForge can independently interpret."""
+    if type(data) is not dict:
+        return None, "invalid_scanner_observation"
+    if "results" not in data:
+        return None, "missing_scanner_results"
+    results = data["results"]
+    if type(results) is not list:
+        return None, "invalid_scanner_results"
+    for result in results:
+        if type(result) is not dict:
+            return None, "unsupported_scanner_result"
+        extra, start = result.get("extra"), result.get("start")
+        if not (
+            type(result.get("path")) is str
+            and result["path"]
+            and type(start) is dict
+            and type(start.get("line")) is int
+            and start["line"] >= 1
+            and type(extra) is dict
+            and type(extra.get("severity")) is str
+            and extra["severity"]
+            and type(extra.get("message")) is str
+            and extra["message"]
+        ):
+            return None, "unsupported_scanner_result"
+    return results, None
+
+
+def _scanner_reported_failure(data):
+    """Recognize observed scanner failures without treating absent output as success."""
+    if type(data) is not dict:
+        return False
+    returncode = data.get("returncode", 0)
+    status = data.get("status")
+    return (
+        bool(data.get("error"))
+        or bool(data.get("errors"))
+        or (status is not None and type(status) is not str)
+        or status in {"crash", "failed", "failure", "error"}
+        or type(returncode) is not int
+        or returncode not in (0, 1)
+    )
+
+
 def _compression(payload, raw):
     unavailable = None
     finding = payload["finding"]
@@ -169,16 +214,18 @@ def _compression(payload, raw):
             # refusing to call ambiguous scanner output a clean observation.
             data = json.loads(raw["content"])
             unavailable = "ambiguous_scanner_json"
-        if (data.get("error") or data.get("errors") or data.get("status") == "crash"
-                or data.get("returncode", 0) not in (0, 1)):
+        if _scanner_reported_failure(data) and unavailable is None:
             unavailable = "scanner_reported_error"
-        results = data.get("results", [])
-        critical = [r for r in results if r.get("extra", {}).get("severity", "").upper()
+        results, result_error = _scanner_results(data)
+        if result_error:
+            if unavailable is None:
+                unavailable = result_error
+            return unavailable
+        critical = [r for r in results if r["extra"]["severity"].upper()
                     in {"WARNING", "ERROR"}]
         critical.sort(key=lambda r: r["extra"]["severity"].upper() != "ERROR")
-        summaries = [f"[{r['extra']['severity']}] {r.get('path', 'Unknown')}:"
-                     f"{r.get('start', {}).get('line', '?')} - "
-                     f"{r['extra'].get('message', 'No description')}" for r in critical[:5]]
+        summaries = [f"[{r['extra']['severity']}] {r['path']}:"
+                     f"{r['start']['line']} - {r['extra']['message']}" for r in critical[:5]]
         _integer(finding["total_findings"])
         _integer(finding["critical_findings_count"])
         _require(finding["total_findings"] == len(results)

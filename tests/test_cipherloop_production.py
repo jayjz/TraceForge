@@ -96,6 +96,28 @@ def _write(folder, rows, metadata):
     (folder / f"metadata_{RUN_ID}.json").write_text(json.dumps(metadata))
 
 
+def _replace_scanner_raw(rows, metadata, raw, *, total_findings=0):
+    base = {
+        "tool": "run_semgrep",
+        "total_findings": total_findings,
+        "critical_findings_count": 0,
+        "top_findings": [],
+        "summary_note": "",
+    }
+    size = len(json.dumps(base, ensure_ascii=False, sort_keys=True))
+    rows[2]["payload"]["content"] = raw
+    rows[3]["payload"]["finding"] = {
+        **base,
+        "raw_char_count": len(raw),
+        "compressed_char_count": size,
+    }
+    metadata.update(
+        total_raw_char_count=len(raw),
+        total_compressed_char_count=size,
+        compression_ratio=len(raw) / size,
+    )
+
+
 def _insert(rows, metadata, index, added):
     """Insert structurally valid rows, shifting old refs so tests reach semantic checks."""
     count = len(added)
@@ -395,6 +417,56 @@ def test_unavailable_or_ambiguous_scanner_output_is_error_evidence(tmp_path, raw
     result = ingest_run(tmp_path, RUN_ID)
     assert result["status"] == "ERROR"
     assert result["diagnostics"][0]["code"] == "tool_output_unavailable"
+
+
+def test_valid_empty_scanner_results_remain_eligible_for_pass(tmp_path):
+    rows, metadata = _fixture("zero")
+    _write(tmp_path, rows, metadata)
+    result = ingest_run(tmp_path, RUN_ID)
+    assert result["status"] == "PASS"
+    assert result["diagnostics"] == []
+
+
+@pytest.mark.parametrize(("raw", "reason"), [
+    ("{}", "missing_scanner_results"),
+    ('{"scanner":"semgrep"}', "missing_scanner_results"),
+    ('{"results":[],"status":"failed"}', "scanner_reported_error"),
+    ('{"results":{}}', "invalid_scanner_results"),
+    ('{"results":null}', "invalid_scanner_results"),
+    ('{"results":[{}]}', "unsupported_scanner_result"),
+])
+def test_unusable_scanner_results_are_unavailable_error_evidence(tmp_path, raw, reason):
+    rows, metadata = _fixture("zero")
+    _replace_scanner_raw(rows, metadata, raw, total_findings=int(raw == '{"results":[{}]}'))
+    _write(tmp_path, rows, metadata)
+    result = ingest_run(tmp_path, RUN_ID)
+    assert result["status"] == "ERROR"
+    assert result["diagnostics"] == [{
+        "code": "tool_output_unavailable",
+        "event_ref": 4,
+        "reason": reason,
+    }]
+
+
+@pytest.mark.parametrize("raw", [
+    '{"results":[],"error":"scanner unavailable"}',
+    '{"results":[],"errors":[{"message":"scanner unavailable"}]}',
+    '{"results":[],"status":"crash"}',
+    '{"results":[],"returncode":2}',
+])
+def test_recognized_scanner_failures_remain_error_evidence(tmp_path, raw):
+    rows, metadata = _fixture("zero")
+    _replace_scanner_raw(rows, metadata, raw)
+    _write(tmp_path, rows, metadata)
+    result = ingest_run(tmp_path, RUN_ID)
+    assert result["status"] == "ERROR"
+    assert result["diagnostics"][0]["reason"] == "scanner_reported_error"
+
+
+def test_valid_nonempty_scanner_result_remains_eligible_for_pass(tmp_path):
+    rows, metadata = _fixture("verified")
+    _write(tmp_path, rows, metadata)
+    assert ingest_run(tmp_path, RUN_ID)["status"] == "PASS"
 
 
 def test_generic_tool_error_is_not_a_clean_zero_candidate_observation(tmp_path):

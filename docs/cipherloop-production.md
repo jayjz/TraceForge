@@ -24,8 +24,11 @@ Completed runs require at least one finished validation cycle, even without tool
 Results use **`traceforge-cipherloop-production-v1`**, not the legacy normalized
 trajectory schema. `status: PASS` concerns `capture_integrity_and_source_locations`.
 `status: ERROR` identifies observed failed/interrupted execution or unavailable
-validation (read failure, malformed candidate, syntax failure), or explicit tool
-failure/unavailable output. Structured diagnostics
+validation (read failure, malformed candidate, syntax failure), explicit tool
+failure, or unavailable scanner evidence. A scanner result is usable only when it
+contains a `results` list of supported result records; an empty list remains a valid
+zero-result observation. Missing, malformed, unsupported, or explicitly failed
+scanner output is unavailable evidence, never a clean zero finding. Structured diagnostics
 retain the relevant event reference/error. Missing commitments raise
 `ProductionArtifactError(code="incomplete")`; incompatible formats use `unsupported`;
 malformed bytes use `corrupt`; invalid relationships use `inconsistent`.
