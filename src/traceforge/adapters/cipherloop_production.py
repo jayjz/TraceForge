@@ -146,6 +146,7 @@ def _check_finding(finding, parsed, read, span):
 
 
 def _compression(payload, raw):
+    unavailable = None
     finding = payload["finding"]
     _require(type(finding) is dict, "invalid compression")
     for key in ("raw_char_count", "compressed_char_count"):
@@ -160,7 +161,17 @@ def _compression(payload, raw):
              "compression tool mismatch")
     if "semgrep" in tool.lower() and "error" not in finding:
         _object(base, "tool total_findings critical_findings_count top_findings summary_note")
-        data = _parse(raw["content"])
+        try:
+            data = _parse(raw["content"])
+        except ProductionArtifactError:
+            # Raw output is an observed string, not an artifact JSON object.
+            # Recompute the producer's permissive parse independently, while
+            # refusing to call ambiguous scanner output a clean observation.
+            data = json.loads(raw["content"])
+            unavailable = "ambiguous_scanner_json"
+        if (data.get("error") or data.get("errors") or data.get("status") == "crash"
+                or data.get("returncode", 0) not in (0, 1)):
+            unavailable = "scanner_reported_error"
         results = data.get("results", [])
         critical = [r for r in results if r.get("extra", {}).get("severity", "").upper()
                     in {"WARNING", "ERROR"}]
@@ -176,6 +187,7 @@ def _compression(payload, raw):
         _require(finding["summary_note"] == (f"Found {len(results)} total issues. Showing top 5 critical."
                                              if len(results) > 5 else ""), "summary note mismatch")
     elif "semgrep" in tool.lower():
+        unavailable = "malformed_scanner_json"
         _object(base, "tool error snippet")
         try:
             json.loads(raw["content"])
@@ -188,6 +200,8 @@ def _compression(payload, raw):
     else:
         _object(base, "tool snippet truncated")
         text = raw["content"]
+        if text.startswith(("Tool Execution Error", "System Error:")):
+            unavailable = "tool_reported_error"
         lines = text.split("\n", 15)
         if len(text) > 3000:
             preview = text[:3000] + "\n... [TRUNCATED: Output exceeded 3000 characters. Refine search.]"
@@ -197,7 +211,7 @@ def _compression(payload, raw):
                 preview += "\n... [TRUNCATED: Output exceeded 15 lines. Refine search query.]"
         _require(type(base["truncated"]) is bool and base["truncated"] == (len(text) > 3000 or len(lines) > 15)
                  and base["snippet"] == preview, "generic compression mismatch")
-    return finding
+    return unavailable
 
 
 def _load(folder, run_id):
@@ -220,7 +234,7 @@ def _load(folder, run_id):
     ledger = ledger_path.read_bytes()
     _require(ledger.endswith(b"\n"), "torn ledger", "corrupt")
     _require(_sha(ledger) == metadata["ledger_sha256"], "ledger hash mismatch", "corrupt")
-    rows = [_parse(line) for line in ledger.splitlines()]
+    rows = [_parse(line) for line in ledger.split(b"\n")[:-1]]
     _integer(metadata["event_count"], 2)
     _require(metadata["event_count"] == len(rows), "event count mismatch")
     for index, row in enumerate(rows, 1):
@@ -267,6 +281,7 @@ def _load(folder, run_id):
     consumed_results, reads, candidates, decided = set(), {}, {}, set()
     active, cycle_count, verified_count = None, 0, 0
     validated_compression_count = 0
+    input_verified_count = 0
     eligible, attempts, cycle_decisions, retained = [], [], [], []
     boundaries, diagnostics, steps = {0}, [], []
     for row in rows[1:-1]:
@@ -307,11 +322,12 @@ def _load(folder, run_id):
                      "duplicate/orphan compression")
             _integer(p["state_index"])
             _require(p["state_index"] == len(compressions), "compression index gap")
-            _compression(p, raw)
+            unavailable = _compression(p, raw)
             consumed_results.add(p["raw_result_ref"])
             compressions.append(row)
-            if "error" in p["finding"]:
-                diagnostics.append({"code": "tool_output_unavailable", "event_ref": seq})
+            if unavailable:
+                diagnostics.append({"code": "tool_output_unavailable", "event_ref": seq,
+                                    "reason": unavailable})
         elif kind == "validation.started":
             _object(p, "cycle compressed_findings_count verified_findings_count")
             for value in p.values():
@@ -322,6 +338,7 @@ def _load(folder, run_id):
                      and p["verified_findings_count"] == verified_count, "cycle state mismatch")
             active = seq
             validated_compression_count = len(compressions)
+            input_verified_count = verified_count
             eligible = [(c["seq"], i) for c in compressions
                         for i, _ in enumerate(c["payload"]["finding"].get("top_findings", []))]
             attempts, cycle_decisions = [], []
@@ -444,6 +461,7 @@ def _load(folder, run_id):
         _require(calls == results and len(consumed_results) == len(results), "unpaired tool evidence")
         _require(active is None and len(decided) == len(candidates), "unfinished validation")
         _require(validated_compression_count == len(compressions), "unvalidated compressed observations")
+        _require(cycle_count > 0, "completed run lacks observed validation")
     else:
         diagnostics.append({"code": f"execution_{status}", "error": finish["error"]})
 
@@ -457,6 +475,9 @@ def _load(folder, run_id):
              "final finding references are not a retained state prefix")
     _require(compression_refs == [c["seq"] for c in compressions[:len(compression_refs)]],
              "final compression reference mismatch")
+    _require(len(compression_refs) >= validated_compression_count
+             and len(final_refs) >= input_verified_count,
+             "final state omits an observed validation input state")
     if completed:
         _require(final_refs == retained and len(compression_refs) == len(compressions),
                  "completed final state omitted evidence")

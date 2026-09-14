@@ -353,3 +353,77 @@ def test_symlinked_artifact_is_rejected(tmp_path):
     ledger.symlink_to(saved)
     with pytest.raises(ProductionArtifactError, match="symlink"):
         ingest_run(tmp_path, RUN_ID)
+
+
+def test_failed_final_findings_require_their_retained_compressions(tmp_path):
+    rows, metadata = _fixture("failed")
+    metadata.update(final_finding_refs=[8], final_compression_refs=[],
+                    compressed_findings_count=0, total_raw_char_count=0,
+                    total_compressed_char_count=0, compression_ratio=None)
+    _write(tmp_path, rows, metadata)
+    with pytest.raises(ProductionArtifactError, match="state|compression"):
+        ingest_run(tmp_path, RUN_ID)
+
+
+def test_completed_run_requires_validation_even_without_tools(tmp_path):
+    rows, metadata = _fixture("zero")
+    rows = [rows[0], rows[-1]]
+    rows[-1]["seq"] = 2
+    metadata.update(event_count=2, finish_ref=2, final_compression_refs=[],
+                    compressed_findings_count=0, total_raw_char_count=0,
+                    total_compressed_char_count=0, compression_ratio=None)
+    _write(tmp_path, rows, metadata)
+    with pytest.raises(ProductionArtifactError, match="validation"):
+        ingest_run(tmp_path, RUN_ID)
+
+
+@pytest.mark.parametrize("raw", [
+    '{"results":[],"errors":[{"message":"Fallback scanner failed: offline"}],'
+    '"fallback_used":true,"original_error":"Semgrep crashed"}',
+    '{"results":[],"results":[]}',
+    '{"results":[],"unused":NaN}',
+    '{"results":[],"unused":1e999}',
+])
+def test_unavailable_or_ambiguous_scanner_output_is_error_evidence(tmp_path, raw):
+    # These are all accepted by the real producer's json.loads-based compressor.
+    rows, metadata = _fixture("zero")
+    rows[2]["payload"]["content"] = raw
+    rows[3]["payload"]["finding"]["raw_char_count"] = len(raw)
+    metadata["total_raw_char_count"] = len(raw)
+    metadata["compression_ratio"] = len(raw) / metadata["total_compressed_char_count"]
+    _write(tmp_path, rows, metadata)
+    result = ingest_run(tmp_path, RUN_ID)
+    assert result["status"] == "ERROR"
+    assert result["diagnostics"][0]["code"] == "tool_output_unavailable"
+
+
+def test_generic_tool_error_is_not_a_clean_zero_candidate_observation(tmp_path):
+    rows, metadata = _fixture("zero")
+    raw = "Tool Execution Error (Code 2): cannot read target"
+    rows[1]["payload"]["tool_calls"][0]["name"] = "read_file"
+    rows[2]["payload"].update(tool_name="read_file", content=raw)
+    base = {"tool": "read_file", "snippet": raw, "truncated": False}
+    size = len(json.dumps(base, ensure_ascii=False, sort_keys=True))
+    rows[3]["payload"]["finding"] = {**base, "raw_char_count": len(raw),
+                                       "compressed_char_count": size}
+    metadata.update(total_raw_char_count=len(raw), total_compressed_char_count=size,
+                    compression_ratio=len(raw) / size)
+    _write(tmp_path, rows, metadata)
+    assert ingest_run(tmp_path, RUN_ID)["status"] == "ERROR"
+
+
+@pytest.mark.parametrize("separator", [b"\r", b"\r\n"])
+def test_jsonl_requires_lf_delimited_events_but_accepts_crlf(tmp_path, separator):
+    rows, metadata = _fixture()
+    _write(tmp_path, rows, metadata)
+    ledger = tmp_path / f"trajectory_{RUN_ID}.jsonl"
+    data = separator.join(ledger.read_bytes().split(b"\n")[:-1]) + b"\n"
+    ledger.write_bytes(data)
+    metadata["ledger_sha256"] = hashlib.sha256(data).hexdigest()
+    (tmp_path / f"metadata_{RUN_ID}.json").write_text(json.dumps(metadata))
+    if separator == b"\r":
+        with pytest.raises(ProductionArtifactError) as error:
+            ingest_run(tmp_path, RUN_ID)
+        assert error.value.code == "corrupt"
+    else:
+        assert ingest_run(tmp_path, RUN_ID)["status"] == "PASS"

@@ -43,8 +43,8 @@ jobs:
           .venv/bin/python -m pip check
       - name: Focused tests and lint
         run: |
-          .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_cipherloop_adapter.py tests/test_cipherloop_baseline.py tests/test_baseline_operations.py
-          .venv/bin/python -m ruff check scripts/generate_cipherloop_baseline.py src/traceforge tests/conftest.py tests/test_cipherloop_adapter.py tests/test_cipherloop_baseline.py tests/test_baseline_operations.py
+          .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_cipherloop_adapter.py tests/test_cipherloop_baseline.py tests/test_baseline_operations.py tests/test_cipherloop_production.py
+          .venv/bin/python -m ruff check scripts/generate_cipherloop_baseline.py src/traceforge tests/conftest.py tests/test_cipherloop_adapter.py tests/test_cipherloop_baseline.py tests/test_baseline_operations.py tests/test_cipherloop_production.py
       - name: Generate and evaluate without credentials
         run: |
           unset OPENAI_API_KEY ANTHROPIC_API_KEY LANGSMITH_API_KEY

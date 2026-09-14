@@ -18,15 +18,26 @@ source reads/slices, finding AST locations, final references, and metadata arith
 Repeated upstream finding IDs are legal across distinct decisions; duplicate or
 orphan event relationships are rejected. Failed captures may preserve observations
 that never entered final state; final references must remain a complete state prefix.
+That prefix must include the input state witnessed by every validation start.
+Completed runs require at least one finished validation cycle, even without tools.
 
 Results use **`traceforge-cipherloop-production-v1`**, not the legacy normalized
 trajectory schema. `status: PASS` concerns `capture_integrity_and_source_locations`.
 `status: ERROR` identifies observed failed/interrupted execution or unavailable
-validation (read failure, malformed candidate, syntax failure). Structured diagnostics
+validation (read failure, malformed candidate, syntax failure), or explicit tool
+failure/unavailable output. Structured diagnostics
 retain the relevant event reference/error. Missing commitments raise
 `ProductionArtifactError(code="incomplete")`; incompatible formats use `unsupported`;
 malformed bytes use `corrupt`; invalid relationships use `inconsistent`.
 No rejected/corrupt capture produces a normal successful result.
+
+Strict JSON applies to the artifact objects. Embedded raw scanner output remains
+an observed string: compression is recomputed with the producer's documented
+`json.loads` semantics. Duplicate keys and nonfinite values inside that string
+produce `ERROR` with `ambiguous_scanner_json`, while duplicates/nonfinite values
+in the artifact structure still cause corrupt-input errors. Structured scanner
+errors (including failure of both scanners) and generic tool error markers also
+produce `ERROR`. Absence of those markers is not proof of tool execution success.
 
 Task success, detection accuracy, exploitability, report, and model provenance remain
 explicitly unavailable. AST location checks verify that referenced symbols occur at
@@ -46,7 +57,7 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python scripts/capture_production_smoke
   --output /tmp/cipherloop-production-smoke
 ```
 
-The output directory must be new. Six scenarios use the real CLI lifecycle,
+The output directory must be new. Nine scenarios use the real CLI lifecycle,
 LangGraph message/list reducers, compressor, validator, and recorder. Tool results
 and source reads are explicitly scripted; no scanner, target app, Docker daemon,
 cloud service, or local model runs. This is a production-contract integration smoke,
@@ -66,15 +77,17 @@ from traceforge.adapters.cipherloop_production import ingest_run
 for folder in sorted(Path('/tmp/cipherloop-copied-bundles').iterdir()):
     metadata = json.loads(next(folder.glob('metadata_*.json')).read_bytes())
     result = ingest_run(folder, metadata['run_id'])
-    expected = 'ERROR' if folder.name in {'read_failure', 'failed', 'interrupted'} else 'PASS'
+    expected = 'ERROR' if folder.name in {'read_failure', 'failed', 'interrupted', 'scanner_failure', 'ambiguous_scanner'} else 'PASS'
     assert result['status'] == expected
     assert len(result['final_findings']) == int(folder.name == 'verified')
     print(folder.name, result['status'], result['execution_status'])
 PY
 ```
 
-Expected integrity/source-location results: verified, zero, rejected → PASS;
-read_failure, failed, interrupted → ERROR. Source-read failure can have observed
+Expected integrity/source-location results: verified, zero, rejected, no_tools → PASS;
+read_failure, failed, interrupted, scanner_failure, ambiguous_scanner → ERROR.
+`no_tools` includes a completed empty validation cycle and asserts no target coverage.
+Source-read failure can have observed
 execution `completed`; the explicit validation error prevents confusing it with
 a clean zero-candidate observation.
 
@@ -91,6 +104,11 @@ producer branch. No baseline repinning, regeneration of goldens, or loosened che
 is part of production ingestion.
 
 P0.1 producer closure and this initial P0.2 ingestion path are verified offline.
+A retained real preflight-failure bundle (`8b1c3f56-dfca-4ac8-9bf7-1d03a9459235`)
+records `FileNotFoundError` for Docker and ingests as ERROR. This proves observed
+preflight-failure handling only; it contains no sandbox or model execution.
+The repository workflow now runs these production tests and lint with the unchanged
+baseline gates. Hosted execution of the revised workflow remains unverified.
 The next bounded milestone is a real sandbox/model execution exported as this
 two-file bundle and independently ingested. No live audit, hosted CI, detection
 accuracy, or power-loss/attestation guarantee follows from the offline smoke.

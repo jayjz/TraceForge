@@ -3,7 +3,7 @@
 TraceForge is an **experimental Python evaluation package** for studying evidence
 and trajectories from tool-using agents.
 
-The implemented system is a **two-case offline CipherLoop evidence baseline**:
+The original baseline is a **two-case offline CipherLoop evidence baseline**:
 scripted scanner responses pass through CipherLoop's real compressor, AST
 validator, and recorder. TraceForge ingests the resulting files, checks schema
 and evidence integrity, and evaluates an independent fixture oracle.
@@ -15,8 +15,14 @@ and evidence integrity, and evaluates an independent fixture oracle.
 These fixtures test evidence handling and integration. They do not establish
 scanner coverage, general detection accuracy, or security effectiveness.
 
-General trajectory scoring, calibrated LLM judges, production ingestion, and live
-detection evaluation are **not implemented**. The research notes and weighted
+Separate [production-v2 artifact ingestion](docs/cipherloop-production.md) is also
+implemented and verified offline. It independently checks capture integrity and
+source locations without importing CipherLoop or assigning task-success verdicts.
+A real preflight failure was captured and ingested as ERROR; a successful live
+sandbox/model audit has not yet been demonstrated.
+
+General trajectory scoring, calibrated LLM judges, and live detection evaluation
+are **not implemented**. The research notes and weighted
 rubric describe future work. Recovery, safety, cost, token, and rubric scores
 remain unavailable in this baseline.
 
@@ -81,6 +87,7 @@ a hosted run has passed.
 
 - `scripts/generate_cipherloop_baseline.py`: synthetic capture harness.
 - `src/traceforge/adapters/cipherloop.py`: artifact-only ingestion and integrity checks.
+- `src/traceforge/adapters/cipherloop_production.py`: independent production evidence ingestion.
 - `src/traceforge/evaluation/`: fixture evaluation and versioned file contract.
 - `tests/fixtures/cipherloop/`: two-case manifest and preserved reference evidence.
 - `schemas/trajectory.schema.json`: normalized trajectory schema.
