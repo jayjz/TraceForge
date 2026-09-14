@@ -91,9 +91,24 @@ def _fixture(kind="verified"):
 
 def _write(folder, rows, metadata):
     ledger = "".join(json.dumps(row) + "\n" for row in rows)
-    metadata["ledger_sha256"] = _hash(ledger)
-    (folder / f"trajectory_{RUN_ID}.jsonl").write_text(ledger)
-    (folder / f"metadata_{RUN_ID}.json").write_text(json.dumps(metadata))
+    ledger_bytes = ledger.encode("utf-8")
+    metadata["ledger_sha256"] = hashlib.sha256(ledger_bytes).hexdigest()
+    (folder / f"trajectory_{RUN_ID}.jsonl").write_bytes(ledger_bytes)
+    (folder / f"metadata_{RUN_ID}.json").write_text(
+        json.dumps(metadata),
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+def test_fixture_writes_lf_bytes_matching_its_hash(tmp_path):
+    rows, metadata = _fixture()
+    _write(tmp_path, rows, metadata)
+
+    ledger = (tmp_path / f"trajectory_{RUN_ID}.jsonl").read_bytes()
+    assert b"\r\n" not in ledger
+    assert hashlib.sha256(ledger).hexdigest() == metadata["ledger_sha256"]
+    assert ingest_run(tmp_path, RUN_ID)["status"] == "PASS"
 
 
 def _replace_scanner_raw(rows, metadata, raw, *, total_findings=0):
@@ -220,20 +235,23 @@ def test_fail_closed_on_corrupt_or_inconsistent_evidence(tmp_path, mutation):
     ledger = tmp_path / f"trajectory_{RUN_ID}.jsonl"
     meta = tmp_path / f"metadata_{RUN_ID}.json"
     if mutation == "hash":
-        ledger.write_text(ledger.read_text().replace("Independent", "Tampered"))
+        # Deliberate byte corruption: do not refresh the committed hash.
+        ledger.write_bytes(ledger.read_bytes().replace(b"Independent", b"Tampered"))
     elif mutation == "missing_commit":
         meta.unlink()
     elif mutation == "torn":
-        ledger.write_text(ledger.read_text()[:-3])
+        # Deliberate truncation: do not refresh the committed hash.
+        ledger.write_bytes(ledger.read_bytes()[:-3])
     elif mutation in {"duplicate_key", "nan", "overflow_number"}:
-        text = ledger.read_text()
+        data = ledger.read_bytes()
         if mutation == "duplicate_key":
-            text = text.replace('"seq": 1,', '"seq": 1, "seq": 1,', 1)
+            data = data.replace(b'"seq": 1,', b'"seq": 1, "seq": 1,', 1)
         else:
-            text = text.replace('"timestamp": 1000.0', '"timestamp": ' + ("NaN" if mutation == "nan" else "1e999"), 1)
-        ledger.write_text(text)
-        metadata["ledger_sha256"] = _hash(text)
-        meta.write_text(json.dumps(metadata))
+            value = b"NaN" if mutation == "nan" else b"1e999"
+            data = data.replace(b'"timestamp": 1000.0', b'"timestamp": ' + value, 1)
+        ledger.write_bytes(data)
+        metadata["ledger_sha256"] = hashlib.sha256(data).hexdigest()
+        meta.write_bytes(json.dumps(metadata).encode("utf-8"))
     elif mutation == "metadata_duplicate":
         meta.write_text(meta.read_text().replace('"event_count": 10', '"event_count": 10, "event_count": 10'))
     with pytest.raises(ProductionArtifactError) as error:
@@ -242,6 +260,8 @@ def test_fail_closed_on_corrupt_or_inconsistent_evidence(tmp_path, mutation):
         assert error.value.code == "incomplete"
     elif mutation in {"version", "mixed_version", "unknown_event"}:
         assert error.value.code == "unsupported"
+    elif mutation in {"duplicate_key", "nan", "overflow_number"}:
+        assert "ledger hash mismatch" not in str(error.value)
 
 
 @pytest.mark.parametrize("index", [2, 3, 5, 6, 7, 8])
@@ -372,7 +392,12 @@ def test_symlinked_artifact_is_rejected(tmp_path):
     ledger = tmp_path / f"trajectory_{RUN_ID}.jsonl"
     saved = tmp_path / "saved"
     ledger.rename(saved)
-    ledger.symlink_to(saved)
+    try:
+        ledger.symlink_to(saved)
+    except OSError as exc:
+        if exc.winerror == 1314:  # Windows symlink creation requires Developer Mode or elevation.
+            pytest.skip("Windows account cannot create symlinks")
+        raise
     with pytest.raises(ProductionArtifactError, match="symlink"):
         ingest_run(tmp_path, RUN_ID)
 
